@@ -1,65 +1,156 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+
+type Habit = "noLiquidCalories" | "noSnacks" | "walked" | "workout";
+
+type DayLog = {
+  date: string;
+  noLiquidCalories: boolean;
+  noSnacks: boolean;
+  walked: boolean;
+  workout: boolean;
+};
+
+const HABITS: { key: Habit; label: string; emoji: string }[] = [
+  { key: "noLiquidCalories", label: "No liquid calories", emoji: "🥤" },
+  { key: "noSnacks", label: "No snacks after dinner", emoji: "🌙" },
+  { key: "walked", label: "Walked / hit steps", emoji: "🚶" },
+  { key: "workout", label: "Workout", emoji: "💪" },
+];
+
+const FEEDBACK: Record<number, string> = {
+  0: "Rough day, reset tomorrow",
+  1: "Start somewhere",
+  2: "Not bad",
+  3: "Good job",
+  4: "Perfect day",
+};
+
+const STORAGE_KEY = "lazy-fat-loss-tracker:v1";
+
+function todayKey(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function emptyLog(date: string): DayLog {
+  return {
+    date,
+    noLiquidCalories: false,
+    noSnacks: false,
+    walked: false,
+    workout: false,
+  };
+}
 
 export default function Home() {
+  const [log, setLog] = useState<DayLog | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+    const date = todayKey();
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as DayLog;
+        if (parsed.date === date) {
+          setLog(parsed);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    setLog(emptyLog(date));
+  }, []);
+
+  useEffect(() => {
+    if (!log) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(log));
+  }, [log]);
+
+  const toggle = (key: Habit) => {
+    setLog((prev) => (prev ? { ...prev, [key]: !prev[key] } : prev));
+  };
+
+  if (!mounted || !log) {
+    return <div className="flex flex-1 items-center justify-center" />;
+  }
+
+  const score =
+    Number(log.noLiquidCalories) +
+    Number(log.noSnacks) +
+    Number(log.walked) +
+    Number(log.workout);
+
+  const prettyDate = new Date(log.date + "T00:00:00").toLocaleDateString(
+    undefined,
+    { weekday: "long", month: "long", day: "numeric" }
+  );
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 py-10">
+      <header className="mb-8">
+        <p className="text-sm font-medium uppercase tracking-wider text-zinc-500">
+          {prettyDate}
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+          Today&apos;s habits
+        </h1>
+      </header>
+
+      <ul className="flex flex-col gap-3">
+        {HABITS.map(({ key, label, emoji }) => {
+          const done = log[key];
+          return (
+            <li key={key}>
+              <button
+                type="button"
+                onClick={() => toggle(key)}
+                aria-pressed={done}
+                className={
+                  "flex w-full items-center gap-4 rounded-2xl border px-5 py-4 text-left transition-colors " +
+                  (done
+                    ? "border-emerald-500/60 bg-emerald-500/10 text-foreground"
+                    : "border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900")
+                }
+              >
+                <span className="text-2xl" aria-hidden>
+                  {emoji}
+                </span>
+                <span className="flex-1 text-base font-medium">{label}</span>
+                <span
+                  className={
+                    "flex h-6 w-6 items-center justify-center rounded-full border text-xs " +
+                    (done
+                      ? "border-emerald-500 bg-emerald-500 text-white"
+                      : "border-zinc-300 dark:border-zinc-700")
+                  }
+                  aria-hidden
+                >
+                  {done ? "✓" : ""}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <section className="mt-10 rounded-2xl border border-zinc-200 bg-white p-6 text-center dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="text-5xl font-semibold tabular-nums">
+          {score}
+          <span className="text-zinc-400">/4</span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+          {FEEDBACK[score]}
+        </p>
+      </section>
+    </main>
   );
 }
